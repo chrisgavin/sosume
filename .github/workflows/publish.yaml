@@ -1,0 +1,22 @@
+name: "Publish"
+on:
+  push:
+    branches:
+      - master
+    tags:
+      - "**"
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: "Checkout"
+        uses: actions/checkout@v2
+      - name: "Build"
+        run: ./script/build
+      - name: "Test"
+        run: ./script/test
+      - name: "Push"
+        run: ./script/push
+        env:
+          DOCKERHUB_USERNAME: "chrisgavin"
+          DOCKERHUB_PASSWORD: "${{ secrets.DOCKERHUB_PASSWORD }}"

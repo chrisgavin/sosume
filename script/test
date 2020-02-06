@@ -1,0 +1,111 @@
+#!/usr/bin/env sh
+set -eu
+script_directory="$(dirname "$0")"
+cd "$script_directory/../"
+
+unset GITHUB_REF
+"./$script_directory"/build
+
+own_uid="$(id -u)"
+own_gid="$(id -g)"
+test_uid="1337"
+test_gid="7331"
+test_name="leetteel"
+test_user_name="leet"
+test_group_name="teel"
+
+log() {
+	>&2 printf "%s\n" "$1"
+}
+
+run_test() {
+	testcase="$1"
+
+	log "Building test case \"$testcase\"..."
+	test_case_image_name="sosume-testcase"
+	docker build --tag "$test_case_image_name" "$testcase"
+
+	log "Running PID test for \"$testcase\"..."
+	pid="$(docker run --rm --env SOSUME_UID="$test_uid" --env SOSUME_GID="$test_gid" "$test_case_image_name" cat /proc/self/stat | cut -d " " -f 1)"
+	if [ "$pid" != "1" ]; then
+		log "Expected PID 1, but was $pid."
+		exit 1
+	fi
+
+	log "Running UID test for \"$testcase\"..."
+	uid="$(docker run --rm --env SOSUME_UID="$test_uid" --env SOSUME_GID="$test_gid" "$test_case_image_name" id -u)"
+	if [ "$uid" != "$test_uid" ]; then
+		log "Expected UID $test_uid, but was $uid."
+		exit 1
+	fi
+
+	log "Running GID test for \"$testcase\"..."
+	gid="$(docker run --rm --env SOSUME_UID="$test_uid" --env SOSUME_GID="$test_gid" "$test_case_image_name" id -g)"
+	if [ "$gid" != "$test_gid" ]; then
+		log "Expected GID $test_gid, but was $gid."
+		exit 1
+	fi
+
+	log "Running name user name test for \"$testcase\"..."
+	user_name="$(docker run --rm --env SOSUME_UID="$test_uid" --env SOSUME_GID="$test_gid" --env SOSUME_NAME="$test_name" "$test_case_image_name" id -u -n)"
+	if [ "$user_name" != "$test_name" ]; then
+		log "Expected user name $test_name, but was $user_name."
+		exit 1
+	fi
+
+	log "Running name group name test for \"$testcase\"..."
+	group_name="$(docker run --rm --env SOSUME_UID="$test_uid" --env SOSUME_GID="$test_gid" --env SOSUME_NAME="$test_name" "$test_case_image_name" id -g -n)"
+	if [ "$group_name" != "$test_name" ]; then
+		log "Expected group name $test_name, but was $group_name."
+		exit 1
+	fi
+
+	log "Running user name test for \"$testcase\"..."
+	user_name="$(docker run --rm --env SOSUME_UID="$test_uid" --env SOSUME_GID="$test_gid" --env SOSUME_USER_NAME="$test_user_name"  --env SOSUME_GROUP_NAME="$test_group_name" "$test_case_image_name" id -u -n)"
+	if [ "$user_name" != "$test_user_name" ]; then
+		log "Expected group name $test_user_name, but was $user_name."
+		exit 1
+	fi
+
+	log "Running group name test for \"$testcase\"..."
+	group_name="$(docker run --rm --env SOSUME_UID="$test_uid" --env SOSUME_GID="$test_gid" --env SOSUME_USER_NAME="$test_user_name"  --env SOSUME_GROUP_NAME="$test_group_name" "$test_case_image_name" id -g -n)"
+	if [ "$group_name" != "$test_group_name" ]; then
+		log "Expected group name $test_group_name, but was $group_name."
+		exit 1
+	fi
+
+	log "Running default home test for \"$testcase\"..."
+	docker run --rm --env SOSUME_UID="$test_uid" --env SOSUME_GID="$test_gid" --env SOSUME_NAME="$test_name" "$test_case_image_name" touch "/home/$test_name/sosume-test"
+
+	log "Running auto-detected UID test for \"$testcase\"..."
+	uid="$(docker run --rm --volume "$HOME:/mnt/:ro" "$test_case_image_name" id -u)"
+	if [ "$uid" != "$own_uid" ]; then
+		log "Expected UID $own_uid, but was $uid."
+		exit 1
+	fi
+
+	log "Running auto-detected GID test for \"$testcase\"..."
+	gid="$(docker run --rm --volume "$HOME:/mnt/:ro" "$test_case_image_name" id -g)"
+	if [ "$gid" != "$own_gid" ]; then
+		log "Expected GID $own_gid, but was $gid."
+		exit 1
+	fi
+
+	test_volume="/mnt/path with\tlots-of%special\\characters\"like'these/"
+	log "Running special volume test \"$test_volume\" for \"$testcase\"..."
+	uid="$(docker run --rm --volume "$HOME:$test_volume:ro" "$test_case_image_name" id -u)"
+	if [ "$uid" != "$own_uid" ]; then
+		log "Expected UID $own_uid, but was $uid."
+		exit 1
+	fi
+}
+
+if [ -z "$@" ]; then
+	for testcase in "./tests/"*; do
+		run_test "$testcase"
+	done
+else
+	for testcase in "$@"; do
+		run_test "$testcase"
+	done
+fi

@@ -1,0 +1,6 @@
+#!/usr/bin/env sh
+set -eu
+if [ ! -z "${DOCKERHUB_PASSWORD-}" ]; then
+	echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
+fi
+docker push chrisgavin/sosume

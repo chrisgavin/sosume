@@ -1,0 +1,68 @@
+#!/bin/sh
+set -eu
+script_directory="$(dirname "$0")"
+
+SOSUME_UID="${SOSUME_UID:-}"
+SOSUME_GID="${SOSUME_GID:-}"
+SOSUME_NAME="${SOSUME_NAME:-user}"
+SOSUME_USER_NAME="${SOSUME_USER_NAME:-$SOSUME_NAME}"
+SOSUME_GROUP_NAME="${SOSUME_GROUP_NAME:-$SOSUME_NAME}"
+SOSUME_HOME="/home/$SOSUME_USER_NAME"
+
+# Auto-detect the correct UID and GID.
+if [ -z "$SOSUME_UID" ] || [ -z "$SOSUME_GID" ]; then
+	while IFS=" " read -r _ path _ _ _ _; do
+		# Escape the path for use as an argument to `printf`.
+		path="$(printf "%s" "$path" | sed "s/%/%%/g")"
+		# Intentionally use the path as the formatter for `printf`, so backslash escapes get unescaped.
+		# shellcheck disable=SC2059
+		path="$(printf "$path")"
+		case "$path" in
+			"/dev/"*) ;;
+			*)
+				# `ls` seems to be the only cross-distribution way to get the ownership information.
+				# shellcheck disable=SC2012
+				owner_uid="$(ls -lnd "$path" | tr -s " " | cut -d " " -f 3)"
+				# shellcheck disable=SC2012
+				owner_gid="$(ls -lnd "$path" | tr -s " " | cut -d " " -f 4)"
+				if [ "$owner_uid" != "0" ] && [ "$owner_gid" != "0" ]; then
+					if [ "$owner_uid" != "${auto_detected_uid:-$owner_uid}" ] || [ "$owner_gid" != "${auto_detected_gid:-$owner_gid}" ]; then
+						>&2 echo "sosume: Found multiple possible mount owners. Found UIDs were $auto_detected_uid and $owner_uid. Found GIDs were $auto_detected_gid and $owner_gid. Paths used were $auto_detected_path and $path."
+						exit 1
+					fi
+					auto_detected_path="$path"
+					auto_detected_uid="$owner_uid"
+					auto_detected_gid="$owner_gid"
+				fi
+				;;
+		esac
+	done < /proc/mounts
+	if [ -z "${auto_detected_uid:-}" ] || [ -z "${auto_detected_gid:-}" ]; then
+		>&2 echo "sosume: Could not auto-detect UID and GID mount owners."
+		exit 1
+	fi
+	SOSUME_UID="$auto_detected_uid"
+	SOSUME_GID="$auto_detected_gid"
+fi
+
+# Create the user and group.
+if command -v useradd > /dev/null && command -v groupadd > /dev/null; then
+	groupadd --gid "$SOSUME_GID" "$SOSUME_GROUP_NAME"
+	if [ -d "$SOSUME_HOME" ]; then
+		create_home_flag="--no-create-home"
+	else
+		create_home_flag="--create-home"
+	fi
+	useradd --uid "$SOSUME_UID" --gid "$SOSUME_GID" --home-dir "$SOSUME_HOME" $create_home_flag "$SOSUME_USER_NAME"
+else
+	addgroup -g "$SOSUME_GID" "$SOSUME_GROUP_NAME"
+	if [ -d "$SOSUME_HOME" ]; then
+		create_home_flag="-H"
+	else
+		create_home_flag=""
+	fi
+	adduser -u "$SOSUME_UID" -G "$SOSUME_GROUP_NAME" -D -h "$SOSUME_HOME" $create_home_flag "$SOSUME_USER_NAME"
+fi
+
+# Switch user and group then hand off to the real entrypoint.
+exec "$script_directory/gosu" "$SOSUME_UID:$SOSUME_GID" "$@"
