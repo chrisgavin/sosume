@@ -61,14 +61,14 @@ run_test() {
 	fi
 
 	log "Running user name test for \"$testcase\"..."
-	user_name="$(docker run --rm --env SOSUME_UID="$test_uid" --env SOSUME_GID="$test_gid" --env SOSUME_USER_NAME="$test_user_name"  --env SOSUME_GROUP_NAME="$test_group_name" "$test_case_image_name" id -u -n)"
+	user_name="$(docker run --rm --env SOSUME_UID="$test_uid" --env SOSUME_GID="$test_gid" --env SOSUME_USER_NAME="$test_user_name" --env SOSUME_GROUP_NAME="$test_group_name" "$test_case_image_name" id -u -n)"
 	if [ "$user_name" != "$test_user_name" ]; then
 		log "Expected group name $test_user_name, but was $user_name."
 		exit 1
 	fi
 
 	log "Running group name test for \"$testcase\"..."
-	group_name="$(docker run --rm --env SOSUME_UID="$test_uid" --env SOSUME_GID="$test_gid" --env SOSUME_USER_NAME="$test_user_name"  --env SOSUME_GROUP_NAME="$test_group_name" "$test_case_image_name" id -g -n)"
+	group_name="$(docker run --rm --env SOSUME_UID="$test_uid" --env SOSUME_GID="$test_gid" --env SOSUME_USER_NAME="$test_user_name" --env SOSUME_GROUP_NAME="$test_group_name" "$test_case_image_name" id -g -n)"
 	if [ "$group_name" != "$test_group_name" ]; then
 		log "Expected group name $test_group_name, but was $group_name."
 		exit 1
