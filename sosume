@@ -45,6 +45,10 @@ if [ -z "$SOSUME_UID" ] || [ -z "$SOSUME_GID" ]; then
 	SOSUME_GID="$auto_detected_gid"
 fi
 
+if [ -d "$SOSUME_HOME" ]; then
+	chown -R "$SOSUME_UID:$SOSUME_GID" "$SOSUME_HOME"
+fi
+
 # Create the user and group.
 if command -v useradd > /dev/null && command -v groupadd > /dev/null; then
 	groupadd --gid "$SOSUME_GID" "$SOSUME_GROUP_NAME"

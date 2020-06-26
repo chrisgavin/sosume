@@ -98,6 +98,14 @@ run_test() {
 		log "Expected UID $own_uid, but was $uid."
 		exit 1
 	fi
+
+	log "Running home permission test for \"$testcase\"..."
+	container_name="sosume-home-permission-test-container"
+	docker rm --force "$container_name" 2>/dev/null || true
+	docker run --name "$container_name" --entrypoint "" "$test_case_image_name" /bin/sh -c "mkdir /home/$test_name/ && touch /home/$test_name/sosume-test"
+	docker commit "$container_name" "$test_case_image_name-home-permission-test"
+	docker rm --force "$container_name"
+	docker run --rm --env SOSUME_UID="$test_uid" --env SOSUME_GID="$test_gid" --env SOSUME_NAME="$test_name" "$test_case_image_name-home-permission-test" touch "/home/$test_name/sosume-test"
 }
 
 if [ -z "$@" ]; then
